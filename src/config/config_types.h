@@ -512,6 +512,7 @@ enum class WallpaperTransition : std::uint8_t {
   Diamond = 8,
   Golden = 9,
   Melt = 10,
+  Crt = 11,
 };
 
 enum class LockscreenTransition : std::uint8_t {
@@ -564,7 +565,7 @@ struct WallpaperConfig {
                                                   WallpaperTransition::Zoom,    WallpaperTransition::Honeycomb,
                                                   WallpaperTransition::Vortex,  WallpaperTransition::Pixel,
                                                   WallpaperTransition::Diamond, WallpaperTransition::Golden,
-                                                  WallpaperTransition::Melt};
+                                                  WallpaperTransition::Melt,    WallpaperTransition::Crt};
   float transitionDurationMs = 1500.0F;
   float edgeSmoothness = 0.3F;
   bool transitionOnStartup = false;
@@ -1032,6 +1033,7 @@ constexpr EnumOption<WallpaperAutomationConfig::Order> kWallpaperAutomationOrder
 };
 
 constexpr EnumOption<WallpaperTransition> kWallpaperTransitions[] = {
+    {WallpaperTransition::Crt, "crt", "settings.options.wallpaper.transition.crt"},
     {WallpaperTransition::Diamond, "diamond", "settings.options.wallpaper.transition.diamond"},
     {WallpaperTransition::Disc, "disc", "settings.options.wallpaper.transition.disc"},
     {WallpaperTransition::Fade, "fade", "settings.options.wallpaper.transition.fade"},

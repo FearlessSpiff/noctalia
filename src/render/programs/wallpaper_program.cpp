@@ -435,6 +435,58 @@ void main() {
 }
 )";
 
+  constexpr char kCrtFragment[] = R"(
+uniform float u_aspectRatio;
+uniform float u_smoothness;
+
+// Old-TV power cycle: the current wallpaper squashes into a glowing horizontal line,
+// pinches into a dot and fades to black; the new wallpaper then plays the same
+// sequence in reverse as the power-on.
+vec3 crtPhase(sampler2D tex, vec2 uv, float phase, float edge, float imgWidth, float imgHeight,
+              float sourceKind, vec4 sourceColor) {
+    float squash = smoothstep(0.0, 0.55, phase);
+    float pinch = smoothstep(0.5, 0.85, phase);
+    float whiten = smoothstep(0.2, 0.55, phase);
+    float dotFade = 1.0 - smoothstep(0.85, 1.0, phase);
+    float thickness = 0.004;
+
+    float scaleY = mix(1.0, thickness, squash);
+    float scaleX = max(mix(1.0, 0.0, pinch), thickness / max(u_aspectRatio, 0.0001));
+
+    // Box in aspect-corrected space: square corners while squashing, rounding in only
+    // during the pinch so the final dot is circular.
+    vec2 p = vec2((uv.x - 0.5) * u_aspectRatio, uv.y - 0.5);
+    vec2 halfSize = vec2(scaleX * u_aspectRatio, scaleY) * 0.5;
+    float corner = min(halfSize.x, halfSize.y) * pinch;
+    vec2 q = abs(p) - halfSize + corner;
+    float dist = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - corner;
+    float mask = 1.0 - smoothstep(-edge, edge, dist);
+
+    vec2 sampleUV = clamp((uv - 0.5) / vec2(scaleX, scaleY) + 0.5, 0.0, 1.0);
+    vec4 texel = sampleSource(tex, sampleUV, imgWidth, imgHeight, sourceKind, sourceColor);
+    vec3 color = mix(texel.rgb, vec3(1.0), whiten);
+    float content = mask * dotFade;
+    float glow = exp(-max(dist, 0.0) * 90.0) * whiten * dotFade * 0.6;
+
+    return min(color * content + vec3(glow), vec3(1.0));
+}
+
+void main() {
+    vec2 uv = v_texcoord;
+    float edge = mix(0.0015, 0.02, u_smoothness * u_smoothness);
+
+    vec3 rgb;
+    if (u_progress < 0.5) {
+        rgb = crtPhase(u_source1, uv, u_progress * 2.0, edge, u_imageWidth1, u_imageHeight1,
+                       u_sourceKind1, u_sourceColor1);
+    } else {
+        rgb = crtPhase(u_source2, uv, (1.0 - u_progress) * 2.0, edge, u_imageWidth2, u_imageHeight2,
+                       u_sourceKind2, u_sourceColor2);
+    }
+    gl_FragColor = vec4(rgb, 1.0);
+}
+)";
+
 } // namespace
 
 void WallpaperProgram::ensureInitialized() {
@@ -453,6 +505,7 @@ void WallpaperProgram::ensureInitialized() {
   initProgram(static_cast<std::size_t>(WallpaperTransition::Diamond), kDiamondFragment);
   initProgram(static_cast<std::size_t>(WallpaperTransition::Golden), kGoldenFragment);
   initProgram(static_cast<std::size_t>(WallpaperTransition::Melt), kMeltFragment);
+  initProgram(static_cast<std::size_t>(WallpaperTransition::Crt), kCrtFragment);
 }
 
 void WallpaperProgram::destroy() {
