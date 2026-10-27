@@ -439,15 +439,14 @@ void main() {
 uniform float u_aspectRatio;
 uniform float u_smoothness;
 
-// Old-TV power cycle: the current wallpaper squashes into a glowing horizontal line,
-// pinches into a dot and fades to black; the new wallpaper then plays the same
-// sequence in reverse as the power-on.
-vec3 crtPhase(sampler2D tex, vec2 uv, float phase, float edge, float imgWidth, float imgHeight,
-              float sourceKind, vec4 sourceColor) {
-    float squash = smoothstep(0.0, 0.55, phase);
-    float pinch = smoothstep(0.5, 0.85, phase);
-    float whiten = smoothstep(0.2, 0.55, phase);
-    float dotFade = 1.0 - smoothstep(0.85, 1.0, phase);
+// Old-TV power-off: the current wallpaper squashes into a glowing horizontal line over
+// the new wallpaper, the line pinches into a dot, and the dot fades out. Returns
+// premultiplied color.
+vec4 crtColor(vec2 uv, float progress, float edge) {
+    float squash = smoothstep(0.0, 0.55, progress);
+    float pinch = smoothstep(0.5, 0.85, progress);
+    float whiten = smoothstep(0.2, 0.55, progress);
+    float dotFade = 1.0 - smoothstep(0.85, 1.0, progress);
     float thickness = 0.004;
 
     float scaleY = mix(1.0, thickness, squash);
@@ -463,27 +462,23 @@ vec3 crtPhase(sampler2D tex, vec2 uv, float phase, float edge, float imgWidth, f
     float mask = 1.0 - smoothstep(-edge, edge, dist);
 
     vec2 sampleUV = clamp((uv - 0.5) / vec2(scaleX, scaleY) + 0.5, 0.0, 1.0);
-    vec4 texel = sampleSource(tex, sampleUV, imgWidth, imgHeight, sourceKind, sourceColor);
+    vec4 texel = sampleSource(u_source1, sampleUV, u_imageWidth1, u_imageHeight1, u_sourceKind1, u_sourceColor1);
     vec3 color = mix(texel.rgb, vec3(1.0), whiten);
     float content = mask * dotFade;
     float glow = exp(-max(dist, 0.0) * 90.0) * whiten * dotFade * 0.6;
 
-    return min(color * content + vec3(glow), vec3(1.0));
+    float alpha = clamp(content + glow, 0.0, 1.0);
+    vec3 rgb = min(color * content + vec3(glow), vec3(alpha));
+    return vec4(rgb, alpha);
 }
 
 void main() {
     vec2 uv = v_texcoord;
-    float edge = mix(0.0015, 0.02, u_smoothness * u_smoothness);
+    vec4 color2 = sampleSource(u_source2, uv, u_imageWidth2, u_imageHeight2, u_sourceKind2, u_sourceColor2);
 
-    vec3 rgb;
-    if (u_progress < 0.5) {
-        rgb = crtPhase(u_source1, uv, u_progress * 2.0, edge, u_imageWidth1, u_imageHeight1,
-                       u_sourceKind1, u_sourceColor1);
-    } else {
-        rgb = crtPhase(u_source2, uv, (1.0 - u_progress) * 2.0, edge, u_imageWidth2, u_imageHeight2,
-                       u_sourceKind2, u_sourceColor2);
-    }
-    gl_FragColor = vec4(rgb, 1.0);
+    float edge = mix(0.0015, 0.02, u_smoothness * u_smoothness);
+    vec4 crt = crtColor(uv, u_progress, edge);
+    gl_FragColor = vec4(crt.rgb + color2.rgb * (1.0 - crt.a), 1.0);
 }
 )";
 
